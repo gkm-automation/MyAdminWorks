@@ -67,16 +67,47 @@ $nsg = New-AzureRmNetworkSecurityGroup -Name "nsg1" -ResourceGroupName $rg -Loca
 
 Set-AzureRmVirtualNetworkSubnetConfig -Name "VMSub" -VirtualNetwork $vnet -NetworkSecurityGroup $nsg -AddressPrefix 10.0.1.0/24   
                                     
-#create Public IP for VM
-$publicip = New-AzureRmPublicIpAddress -Name "VMPIP" -ResourceGroupName $rg -Location $location -AllocationMethod Static
+#create Availability Set
+$as = New-AzureRmAvailabilitySet -Name "AS1" -ResourceGroupName $rg -Location $location -Sku aligned -PlatformUpdateDomainCount 5 -PlatformFaultDomainCount 2
 
-#create NIC for VM's
-$nic_vm1 = New-AzureRmNetworkInterface -Name "VM1_nic" -ResourceGroupName $rg -Location $location -PublicIpAddress $publicip -NetworkSecurityGroup $nsg -Subnet $vnet.Subnets[0]
+
+for ($i=1; $i -le 3; $i++)
+{
+   New-AzNetworkInterface `
+     -ResourceGroupName $rg `
+     -Name myVM$i `
+     -Location $location `
+     -Subnet $vnet.Subnets[0] `
+     -LoadBalancerBackendAddressPool $lb.BackendAddressPools[0]
+}
 
 #Create Web Server VM
-$vm1config = New-AzureRmVMConfig -VMName "Web-Server1" -VMSize 'Standard_DS2' | `
-                Set-AzureRmVMOperatingSystem -Windows -ComputerName "Web-Server1" -Credential $crd | `
-                Set-AzureRmVMSourceImage -PublisherName 'MicrosoftWindowsServer' -Offer 'Windowsserver' `
-                -Skus '2016-Datacenter' -Version latest | Add-AzVMNetworkInterface -Id $nic_vm1.Id
+for ($i=1; $i -le 3; $i++)
+{
+    New-AzVm `
+        -ResourceGroupName $rg `
+        -Name "myVM$i" `
+        -Location $location `
+        -VirtualNetworkName "vnet" `
+        -SubnetName "VMSub" `
+        -SecurityGroupName "nsg1" `
+        -OpenPorts 80 `
+        -AvailabilitySetName "AS1" `
+        -Credential $crd `
+        -AsJob
+}
 
-$vmweb = New-AzureRmVM -ResourceGroupName $rg -Location 'Central US' -VM $vm1config
+#Install IIS with Custom Script Extension
+
+for ($i=1; $i -le 3; $i++)
+{
+   Set-AzVMExtension `
+     -ResourceGroupName $rg `
+     -ExtensionName "IIS" `
+     -VMName myVM$i `
+     -Publisher Microsoft.Compute `
+     -ExtensionType CustomScriptExtension `
+     -TypeHandlerVersion 1.8 `
+     -SettingString '{"commandToExecute":"powershell Add-WindowsFeature Web-Server; powershell Add-Content -Path \"C:\\inetpub\\wwwroot\\Default.htm\" -Value $($env:computername)"}' `
+     -Location $location
+}
