@@ -15,15 +15,15 @@ foreach($record in $current){
     }
     $obj = [PSCustomObject]@{
         Label = $record.label
+        Base_Lapsed = $basevalue
+        'current_Lapsed' = $($record.'elapsed')
        'Difference(Secs)' = $diffValue
-       'DeviationThreshold' = $DeviationThreshold
 
     }
 $results += $obj
 }
 
 Write-Output ($results | ft)
-
 
 ## Only following 5 variables are required to send mail
 $myorg = “my-ado-org”
