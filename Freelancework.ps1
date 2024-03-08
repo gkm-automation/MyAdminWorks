@@ -127,4 +127,76 @@ $_.Exception
           # Send the email
           $SMTPClient.Send($Message)
 
+
+
+################UPDATED############
+#Change Baseline CSV path
+$base = Import-Csv "C:\Users\\Downloads\results\base.csv" | Where-Object { $_.label -Like "ClaimsFNOL*" } | Select-Object label,@{n='elapsed';e={$_.elapsed/1000}}
+#Change Current CSV Path
+$current = Import-Csv "C:\Users\\Downloads\results\current.csv" | Where-Object { $_.label -Like "ClaimsFNOL*" } | Select-Object label,@{n='elapsed';e={$_.elapsed/1000}}
+$results = @()
+[Bool]$flag = $false
+foreach($record in $current){
+    $basevalue = ($base | Where-Object { $_.label -eq $record.label }).'elapsed'[0]
+    $diffValue = $basevalue - $($record.'elapsed')
+    $divMark = (($basevalue/100)*5)+ $basevalue
+    If($($record.'elapsed') -ge $divMark){
+        $flag = $true
+    }
+    $obj = [PSCustomObject]@{
+        Label = $record.label
+        Base_Lapsed = $basevalue
+        'current_Lapsed' = $($record.'elapsed')
+       'Difference(Secs)' = $diffValue
+
+    }
+$results += $obj
+}
+
+#Convert Table data To Html Format 
+          #$HTMLTable=ConvertTo-Html -InputObject ($result) -Fragment
+          $Body = "<h1>Test Data</h1><ul>"  # Start building the HTML body
+          $Body += "<table border='1' cellspacing='0' cellpadding='4'><tr><th>TransactionName</th><th>BaseLine AVG PageTime</th><th>Current AVG PageTime</th><th>Difference (Secs)</th></tr>"
+          # Loop through the array and add each element to the HTML body
+          foreach ($item in $results) {
+              $Body += "<tr>"
+              $Body += "<td>$($item.Label)</td>"
+              $Body += "<td>$($item.Base_Lapsed)</td>"
+              $Body += "<td>$($item.current_Lapsed)</td>"
+              $Body += "<td>$($item.Difference_Secs)</td>"
+              $Body += "</tr>"
+          }
+
+          $Body += "</table>"  # Close the table tag
+
+         $ToList=@("sreddy@hagerty.com","mlal@Hagerty.com","mande@hagerty.com","achaudhary@hagerty.com")
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          # Define email parameters
+          $From = "ODCH_SMTP_svc@hagerty.com"
+          $To = $ToList
+          #$To = "sreddy@hagerty.com"
+          $Subject = "Pipeline Run Notification"
+          #$Body = "<h2> Table Data</h2>$HTMLTable"
+
+          # Specify SMTP server settings
+          $SMTPServer = "smtp.office365.com"
+          $SMTPPort = 587 # or the appropriate port for your SMTP server
+          $Username = "ODCH_SMTP_svc@hagerty.com"
+          $Password = "$(smtppwd)"
+
+          # Create an SMTP client object
+          $SMTPClient = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
+          $SMTPClient.EnableSsl = $true  # Enable SSL/TLS encryption
+
+          # Set SMTP credentials
+          $SMTPClient.Credentials = New-Object System.Net.NetworkCredential($Username, $Password)
+
+          # Create Mail body object
+          $Message = New-Object System.Net.Mail.MailMessage($From, $To, $Subject, $Body)
+          $Message.IsBodyHtml = $true # setting boday content as a html
+
+          if($flag){
+            # Send the email
+            $SMTPClient.Send($Message)
+          }
           
